@@ -89,6 +89,8 @@ class SetPasswordView(APIView):
 
         user = get_object_or_404(User, id=user_id)
         user.set_password(password)
+        user.is_active = True
+        user.is_verified = True
         user.save()
 
         return Response({"message": "Password set successfully"})
