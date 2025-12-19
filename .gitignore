@@ -43,11 +43,13 @@ db.sqlite3-journal
 
 # Environment variables
 .env
+.env.*
 .env.prod
 .env.local
 
 # IDE
 .vscode/
+.cursor/
 .idea/
 *.swp
 *.swo
