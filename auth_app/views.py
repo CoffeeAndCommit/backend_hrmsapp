@@ -1,12 +1,20 @@
+"""
+views.py
+
+This file defines all authentication-related APIs.
+Each endpoint is designed with:
+- minimal data exposure
+- clear security boundaries
+- frontend-friendly flows
+"""
 import os
 from django.shortcuts import render, redirect
-
 # Create your views here.
 from auth_app.emails import send_password_reset_email
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.permissions import AllowAny,IsAdminUser, IsAuthenticated
 from rest_framework.generics import CreateAPIView
-from .serializers import AdminCreateUserSerializer, ChangePasswordSerializer, CustomTokenObtainPairSerializer
+from .serializers import AdminCreateUserSerializer, ChangePasswordSerializer, CustomTokenObtainPairSerializer, SetPasswordSerializer
 from .models import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -15,12 +23,24 @@ from .models import User
 from .utils import generate_password_setup_token, verify_email_token
 from rest_framework import status
 from .utils import verify_password_setup_token
+from rest_framework_simplejwt.views import TokenRefreshView
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
+# ------------------------------------------------------------------
+# FORGOT PASSWORD
+# ------------------------------------------------------------------
+
 class ForgotPasswordView(APIView):
+    """
+    Initiates password reset via email.
+
+    Security:
+    - Always returns success message
+    - Does NOT reveal if email exists
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -38,29 +58,94 @@ class ForgotPasswordView(APIView):
         return Response({
             "message": "If an account exists, a password reset link has been sent."
         })
+
+
+# ------------------------------------------------------------------
+# SET PASSWORD (First login OR reset)
+# ------------------------------------------------------------------
+
+
+
+
 class SetPasswordView(APIView):
+    """
+    Sets password using a secure token.
+
+    Used for:
+    - first-time password setup
+    - forgot-password reset
+    """
     authentication_classes = []
     permission_classes = []
 
     def post(self, request):
+        print("🔵 STEP 1: Entered SetPasswordView")
+
+        print("🔵 STEP 2: Raw request.data =", request.data)
+
         token = request.data.get("token")
         password = request.data.get("password")
 
+        print("🔵 STEP 3: token =", token)
+        print("🔵 STEP 4: raw password repr =", repr(password))
+
         user_id = verify_password_setup_token(token)
 
+        print("🔵 STEP 5: user_id from token =", user_id)
+
         if not user_id:
+            print("🔴 ERROR: Token invalid or expired")
             return Response(
                 {"error": "Invalid or expired token"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         user = get_object_or_404(User, id=user_id)
+
+        print("🔵 STEP 6: User fetched")
+        print("   username =", user.username)
+        print("   email =", user.email)
+        print("   is_active (before) =", user.is_active)
+        print("   is_verified (before) =", getattr(user, "is_verified", None))
+
         user.set_password(password)
+        print("🔵 STEP 7: Password set using set_password()")
+
+        user.is_active = True
+        user.is_verified = True
+
+        print("🔵 STEP 8: Flags updated")
+        print("   is_active (after) =", user.is_active)
+        print("   is_verified (after) =", user.is_verified)
+
         user.save()
+        print("🔵 STEP 9: User saved to database")
+
+        # 🔥 CRITICAL VERIFICATION
+        password_check = user.check_password(password)
+        print("🔵 STEP 10: check_password result =", password_check, password)
+
+        if not password_check:
+            print("🚨 CRITICAL BUG: Password saved does NOT match input!")
+
+        print("🟢 STEP 11: SetPasswordView completed successfully")
 
         return Response({"message": "Password set successfully"})
 
+
+# ------------------------------------------------------------------
+# CHANGE PASSWORD (Logged-in user)
+# ------------------------------------------------------------------
+
 class ChangePasswordView(APIView):
+    """
+    Allows authenticated users to change password.
+
+    Requires:
+    - old password verification
+    - JWT authentication
+    """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -81,7 +166,19 @@ class ChangePasswordView(APIView):
         return Response(
             {"message": "Password changed successfully. Please login again."}
         )
- 
+# ------------------------------------------------------------------
+# EMAIL VERIFICATION
+# ------------------------------------------------------------------
+
+"""
+    Verifies email ownership.
+
+    On success:
+    - activates account
+    - marks email verified
+    - generates password setup token
+    - redirects user to frontend set-password page
+    """
 class VerifyEmailView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -103,15 +200,24 @@ class VerifyEmailView(APIView):
           # 🔐 Generate password setup token
         pwd_token = generate_password_setup_token(user.id)
 
-        # return Response({"message": "Email verified successfully"})
 #  🚀 Redirect to frontend change-password page
         return redirect(
             f"{os.environ.get('BASE_URL_FRONTEND')}/set-password?token={pwd_token}"
         )   
 
 
+# ------------------------------------------------------------------
+# ADMIN CREATES USER
+# ------------------------------------------------------------------
 
+"""
+    Allows ONLY admin users to create accounts.
 
+    Flow:
+    Admin creates user
+    → User inactive + unverified
+    → Verification email sent
+    """
 class AdminCreateUserView(CreateAPIView):
     permission_classes = [IsAdminUser]  # only admin can create users
     queryset = User.objects.all()
@@ -119,9 +225,20 @@ class AdminCreateUserView(CreateAPIView):
 
 
 
+# ------------------------------------------------------------------
+# LOGIN (JWT)
+# ------------------------------------------------------------------
+"""
+    Issues JWT tokens.
 
+    Custom serializer ensures:
+    - email verified
+    - account active
+    - admins bypass verification
+    """
 
 class LoginAPI(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = (AllowAny,)
+
 

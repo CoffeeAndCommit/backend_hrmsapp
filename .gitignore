@@ -1,7 +1,10 @@
 # Python
 __pycache__/
 ../__pycache__/
-.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 *.py[cod]
 *$py.class
 *.so
@@ -21,7 +24,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+data.json
+.env
 # Virtual Environment
 venv/
 env/
@@ -58,4 +62,9 @@ Thumbs.db
 # Render
 .render/
 
-DATABASE_STRUCTURE.md
+# Environment variables
+.env
+.env.*
+
+__pycache__/
+*.pyc
