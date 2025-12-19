@@ -1,5 +1,32 @@
 from django.contrib import admin
+from django.core.exceptions import ValidationError
+from django import forms
 from .models import Employee, EmergencyContact, Education, WorkHistory
+from auth_app.models import User
+
+
+class EmployeeAdminForm(forms.ModelForm):
+    """Custom form to validate user selection"""
+    
+    class Meta:
+        model = Employee
+        fields = '__all__'
+    
+    def clean_user(self):
+        """Ensure only verified users can be linked to employees"""
+        user = self.cleaned_data.get('user')
+        if user:
+            if not user.is_verified:
+                raise ValidationError(
+                    "Only verified users can be linked to employees. "
+                    "Please verify the user first before creating an employee record."
+                )
+            # Check if user already has an employee profile
+            if hasattr(user, 'employee_profile') and self.instance.pk != user.employee_profile.pk:
+                raise ValidationError(
+                    f"This user ({user.username}) is already linked to another employee."
+                )
+        return user
 
 
 class EmergencyContactInline(admin.TabularInline):
@@ -25,6 +52,7 @@ class WorkHistoryInline(admin.TabularInline):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
+    form = EmployeeAdminForm
     list_display = (
         'employee_id', 'get_full_name', 'email', 'department', 
         'designation', 'employment_status', 'is_active', 'joining_date'
@@ -80,12 +108,41 @@ class EmployeeAdmin(admin.ModelAdmin):
         }),
     )
     
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Filter user field to only show verified users who don't have an employee profile"""
+        if db_field.name == "user":
+            # Only show verified, active users who don't already have an employee profile
+            kwargs["queryset"] = User.objects.filter(
+                is_verified=True,
+                is_active=True
+            ).exclude(
+                employee_profile__isnull=False
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    
     def get_full_name(self, obj):
         return obj.get_full_name()
     get_full_name.short_description = 'Full Name'
     
     def save_model(self, request, obj, form, change):
-        """Set created_by and updated_by"""
+        """Set created_by and updated_by, and auto-populate from user if available"""
+        if not change and obj.user and obj.user.is_verified:
+            # Auto-populate fields from user if they're empty
+            if not obj.first_name and obj.user.first_name:
+                obj.first_name = obj.user.first_name
+            if not obj.last_name and obj.user.last_name:
+                obj.last_name = obj.user.last_name
+            if not obj.email and obj.user.email:
+                obj.email = obj.user.email
+            if not obj.phone and obj.user.phone_number:
+                obj.phone = obj.user.phone_number
+            if not obj.gender and obj.user.gender:
+                # Map User gender (M/F/O) to Employee gender (male/female/other)
+                gender_map = {'M': 'male', 'F': 'female', 'O': 'other'}
+                obj.gender = gender_map.get(obj.user.gender, '')
+            if not obj.photo and obj.user.photo:
+                obj.photo = obj.user.photo
+        
         if not change:
             obj.created_by = request.user
         obj.updated_by = request.user
