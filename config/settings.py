@@ -18,7 +18,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-SECRET_KEY = os.environ.get('SECRET_KEY')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%^s(b7710kn)icqkqos)kc4oe7cv=7p3)p#1rq#f$+lpcag1z7')
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is required!")
 
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'anymail',
     'departments.apps.DepartmentsConfig',
     'employees.apps.EmployeesConfig',
+    'holidays.apps.HolidaysConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -174,7 +175,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'en-us')
 
 TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 
@@ -190,7 +191,7 @@ STATIC_URL = 'static/'
 
 
 # email
-print('APi key',os.getenv("MAILGUN_API_KEY"))
+# print('Api key',os.getenv("MAILGUN_API_KEY"))
 ANYMAIL = {
     # (exact settings here depend on your ESP...)
    "SENDINBLUE_API_KEY": os.getenv("MAILGUN_API_KEY"),
