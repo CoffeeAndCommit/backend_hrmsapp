@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'employees.apps.EmployeesConfig',
     'holidays.apps.HolidaysConfig',
     'inventory.apps.InventoryConfig',
+    'drf_yasg',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -217,5 +218,18 @@ print("EMAIL USER:", DEFAULT_FROM_EMAIL)
 print("EMAIL BACKEND:", EMAIL_BACKEND)
 
 
+
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': "Type in the *'Value'* input box below: **Bearer &lt;your_token&gt;**<br>Example: `Bearer eyJhbGci...`"
+        }
+    },
+    'USE_SESSION_AUTH': False,
+}
 
 CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com",  "https://hrms-frontend-wheat.vercel.app",]
