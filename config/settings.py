@@ -168,10 +168,18 @@ if 'OPTIONS' in DATABASES['default'] and 'ssl-mode' in DATABASES['default']['OPT
     del DATABASES['default']['OPTIONS']['ssl-mode']
     
 # Add correct SSL config for mysqlclient when running on Render
-if os.environ.get('RENDER'):
+# Add correct SSL config for mysqlclient when running on Render OR connecting to TiDB
+# We check 'tidbcloud.com' in the HOST to automatically enable SSL, as TiDB requires it.
+db_host = DATABASES['default'].get('HOST', '')
+if os.environ.get('RENDER') or (db_host and 'tidbcloud.com' in db_host):
     if 'OPTIONS' not in DATABASES['default']:
         DATABASES['default']['OPTIONS'] = {}
-    DATABASES['default']['OPTIONS']['ssl'] = {'ssl_mode': 'REQUIRED'}
+    
+    # Ensure proper SSL config is present (overwriting if necessary)
+    if 'ssl' not in DATABASES['default']['OPTIONS']:
+         DATABASES['default']['OPTIONS']['ssl'] = {}
+    
+    DATABASES['default']['OPTIONS']['ssl']['ssl_mode'] = 'REQUIRED'
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
