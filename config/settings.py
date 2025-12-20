@@ -163,12 +163,15 @@ import dj_database_url
 db_from_env = dj_database_url.config(conn_max_age=500)
 DATABASES['default'].update(db_from_env)
 
-# Fix for TiDB/MySQL SSL: 'ssl-mode' is not supported by mysqlclient, use OPTIONS
-if 'ssl-mode' in DATABASES['default']:
-    del DATABASES['default']['ssl-mode']
-    DATABASES['default']['OPTIONS'] = {
-        'ssl': {'ssl_mode': 'REQUIRED'} if os.environ.get('RENDER') else {} # Basic SSL enforcment
-    }
+# Fix for TiDB/MySQL SSL: 'ssl-mode' is not supported by mysqlclient (it's inside OPTIONS)
+if 'OPTIONS' in DATABASES['default'] and 'ssl-mode' in DATABASES['default']['OPTIONS']:
+    del DATABASES['default']['OPTIONS']['ssl-mode']
+    
+# Add correct SSL config for mysqlclient
+if os.environ.get('RENDER'):
+    if 'OPTIONS' not in DATABASES['default']:
+        DATABASES['default']['OPTIONS'] = {}
+    DATABASES['default']['OPTIONS']['ssl'] = {'ssl_mode': 'REQUIRED'}
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
