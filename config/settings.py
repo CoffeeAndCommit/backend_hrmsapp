@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'employees.apps.EmployeesConfig',
     'holidays.apps.HolidaysConfig',
     'inventory.apps.InventoryConfig',
+    'leaves.apps.LeavesConfig',
     'drf_yasg',
     'django.contrib.admin',
     'django.contrib.auth',
