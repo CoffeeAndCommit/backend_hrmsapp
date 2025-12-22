@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'holidays.apps.HolidaysConfig',
     'inventory.apps.InventoryConfig',
     'leaves.apps.LeavesConfig',
+    'attendance.apps.AttendanceConfig',
     'drf_yasg',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -285,3 +286,8 @@ LOGGING = {
         'level': 'DEBUG',
     },
 }
+
+# Attendance Settings
+ATTENDANCE_DEFAULT_WORKING_HOURS = os.environ.get('ATTENDANCE_DEFAULT_WORKING_HOURS', '09:00')
+ATTENDANCE_DEFAULT_TOTAL_TIME_SECONDS = int(os.environ.get('ATTENDANCE_DEFAULT_TOTAL_TIME_SECONDS', '32400'))  # 9 hours
+ATTENDANCE_HALF_DAY_THRESHOLD = float(os.environ.get('ATTENDANCE_HALF_DAY_THRESHOLD', '0.5'))  # 50% of scheduled time
