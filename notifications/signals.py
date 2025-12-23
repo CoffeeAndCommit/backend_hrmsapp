@@ -3,6 +3,7 @@ from django.dispatch import receiver
 from leaves.models import Leave
 from payroll.models import Payslip
 from attendance.models import Attendance
+from employees.models import Employee
 
 from .slack_utils import SlackNotificationService
 import logging
@@ -172,3 +173,11 @@ def handle_manual_attendance_notification(sender, instance, created, **kwargs):
                 )
     except Exception as e:
         logger.error(f"Error in manual attendance notification signal: {e}")
+
+@receiver(post_save, sender=Employee)
+def handle_employee_welcome_notification(sender, instance, created, **kwargs):
+    try:
+        if created:
+            SlackNotificationService.notify_welcome(instance)
+    except Exception as e:
+        logger.error(f"Error in employee welcome notification signal: {e}")

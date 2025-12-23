@@ -148,6 +148,17 @@ class SlackNotificationService:
         return service.send_message(employee, message)
 
     @staticmethod
+    def notify_welcome(employee):
+        """ Sends a welcome message to the newly created employee. """
+        service = SlackNotificationService()
+        message = (
+            f"Hi @{employee.get_full_name()} !!\n"
+            f" Welcome to the team! Your HRMS account has been successfully created.\n"
+            f" You can now check in/out and manage your leaves/timesheets through the system."
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
     def notify_compensation_summary(employee, total_compensate, details):
         """
         Hi @Name
