@@ -1,5 +1,17 @@
 from django.contrib import admin
-from .models import Attendance
+from .models import Attendance, Timesheet, ManualAttendanceRequest
+# ms
+@admin.register(Timesheet)
+class TimesheetAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'start_date', 'end_date', 'status', 'hours')
+    list_filter = ('status', 'start_date')
+    search_fields = ('employee__first_name', 'employee__last_name')
+# ms
+@admin.register(ManualAttendanceRequest)
+class ManualAttendanceRequestAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'date', 'entry_time', 'exit_time', 'status')
+    list_filter = ('status', 'date')
+    search_fields = ('employee__first_name', 'employee__last_name', 'reason')
 from .constants import TIME_12HR_FORMAT
 
 

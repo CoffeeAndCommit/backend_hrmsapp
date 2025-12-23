@@ -127,7 +127,7 @@ class SlackNotificationService:
         """ Hi @Name, Your timings are updated for date Date ... """
         service = SlackNotificationService()
         message = (
-            f"Hi {employee.first_name}\n"
+            f"Hi @{employee.get_full_name()}\n"
             f" Your timings are updated for date {date}\n"
             f" Entry Time - {entry_time}\n"
             f" Exit Time - {exit_time}\n"
@@ -140,10 +140,84 @@ class SlackNotificationService:
         """ Hi @Name, Your Previous working day Entry Time: ... """
         service = SlackNotificationService()
         message = (
-            f"Hi {employee.first_name}\n"
+            f"Hi @{employee.get_full_name()}\n"
             f"Your Previous working day Entry Time: {prev_entry}\n"
             f"Your Previous working day Exit Time: {prev_exit}\n"
             f"Today's Entry Time {today_entry} ."
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_compensation_summary(employee, total_compensate, details):
+        """
+        Hi @Name
+        You have to compensate 8h : 40m :33s .
+        Compensation Summary:
+        Date # Type # Duration ## Pending = Total
+        """
+        service = SlackNotificationService()
+        message = (
+            f"Hi @{employee.get_full_name()}\n"
+            f" You have to compensate {total_compensate} .\n"
+            f" *Compensation Summary:*\n"
+            f" {details}"
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_timesheet_submitted(employee, start_date, end_date):
+        """ Hi @Name, You have successfully submitted timesheet from Monday, 15-Sep-2025 to Sunday, 21-Sep-2025. """
+        service = SlackNotificationService()
+        message = (
+            f"Hi @{employee.get_full_name()}\n"
+            f" You have successfully submitted timesheet from {start_date} to {end_date}."
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_manual_attendance_request(employee, date, entry, exit, hours, reason):
+        """ Hi @Name, You had requested for manual entry and exit time... """
+        service = SlackNotificationService()
+        message = (
+            f"Hi @{employee.get_full_name()}\n"
+            f" You had requested for manual entry and exit time : Entry time : {date} {entry} and Exit time : {date} {exit}\n"
+            f" {hours} to be requested.\n"
+            f" Reason - {reason}\n"
+            f" You will be notified once it is approved/declined."
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_manual_attendance_approved(employee, date, time):
+        """ Hi @Name, Your manual attendance 10-07-2025 07:15 PM is approved. """
+        service = SlackNotificationService()
+        message = f"Hi @{employee.get_full_name()}\n Your manual attendance  {date} {time} is approved."
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_late_alert(employee, late_dates, today_entry, prev_entry=None, prev_exit=None):
+        """ Hi @Name, You have been late more than 4 times already on 6th, 7th... Today's Entry Time 11:05 AM . """
+        service = SlackNotificationService()
+        prev_info = ""
+        if prev_entry and prev_exit:
+            prev_info = f"Your Previous working day Entry Time: {prev_entry}\nYour Previous working day Exit Time: {prev_exit}\n"
+        
+        message = (
+            f"Hi @{employee.get_full_name()}\n"
+            f"{prev_info}"
+            f"You have been late more than 4 times already on {late_dates} of this month. Make sure to be on time.\n"
+            f"Today's Entry Time {today_entry} ."
+        )
+        return service.send_message(employee, message)
+
+    @staticmethod
+    def notify_working_hours_updated(employee, date, hours, reason):
+        """ Hi @Name !! Your working hours is updated for date 01-Oct-2025 to 10:39 Hours. Reason - ... """
+        service = SlackNotificationService()
+        message = (
+            f"Hi @{employee.get_full_name()} !!\n"
+            f" Your working hours is updated for date {date} to {hours} Hours\n"
+            f" Reason - {reason}"
         )
         return service.send_message(employee, message)
 
@@ -152,9 +226,14 @@ class SlackNotificationService:
         """ Hi @Name, You have not entered time Today . """
         service = SlackNotificationService()
         if date:
-            message = f"Hi {employee.first_name}\nYou didn't put your Entry/Exit Time on {date}\nYou have not entered time Today ."
+            message = (
+                f"Hi @{employee.get_full_name()}\n"
+                f"You didn't put your Entry Time on {date}\n"
+                f"You didn't put your Exit Time on {date}\n"
+                f"You have not entered time Today ."
+            )
         else:
-            message = f"Hi {employee.first_name}\nYou have not entered time Today ."
+            message = f"Hi @{employee.get_full_name()}\nYou have not entered time Today ."
         return service.send_message(employee, message)
 
     @staticmethod
