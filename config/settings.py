@@ -138,6 +138,27 @@ CORS_ALLOWED_ORIGINS = [
     "https://hrms-frontend-wheat.vercel.app",
 ]
 
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Update ALLOWED_HOSTS based on environment
