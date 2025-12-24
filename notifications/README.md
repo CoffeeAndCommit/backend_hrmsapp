@@ -67,3 +67,4 @@ The module supports:
 - **Leave Actions**: Summary of applied leaves and approval notifications.
 - **Payroll**: Notifications about monthly payslip generation.
 - **Daily Reminders**: Alerts for missing attendance entries.
+<!-- https://api.slack.com/apps/A0A59L1T3EG/event-subscriptions?success=1 -->

@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 from .models import Attendance, Timesheet, ManualAttendanceRequest
 # ms
 @admin.register(Timesheet)
@@ -19,6 +20,7 @@ from .constants import TIME_12HR_FORMAT
 class AttendanceAdmin(admin.ModelAdmin):
     list_display = (
         'employee', 'date', 'get_in_time', 'get_out_time', 
+        'get_report_time', 'get_standup_time', 'get_lunch_start_time', 'get_lunch_end_time',    
         'get_office_time', 'get_home_time',
         'day_type', 'get_total_time', 'get_extra_time', 
         'admin_alert', 'is_working_from_home', 'created_at'
@@ -127,6 +129,34 @@ class AttendanceAdmin(admin.ModelAdmin):
             return f"{obj.home_in_time.strftime(TIME_12HR_FORMAT)} - (not checked out)"
         return "-"
     get_home_time.short_description = 'Home Time'
+
+    def get_report_time(self, obj):
+        """Format report_time for display in IST"""
+        if obj.report_time:
+            return timezone.localtime(obj.report_time).strftime(TIME_12HR_FORMAT)
+        return "-"
+    get_report_time.short_description = 'Report'
+
+    def get_standup_time(self, obj):
+        """Format standup_time for display in IST"""
+        if obj.standup_time:
+            return timezone.localtime(obj.standup_time).strftime(TIME_12HR_FORMAT)
+        return "-"
+    get_standup_time.short_description = 'Standup'
+
+    def get_lunch_start_time(self, obj):
+        """Format lunch_start_time for display in IST"""
+        if obj.lunch_start_time:
+            return timezone.localtime(obj.lunch_start_time).strftime(TIME_12HR_FORMAT)
+        return "-"
+    get_lunch_start_time.short_description = 'Lunch Start'
+
+    def get_lunch_end_time(self, obj):
+        """Format lunch_end_time for display in IST"""
+        if obj.lunch_end_time:
+            return timezone.localtime(obj.lunch_end_time).strftime(TIME_12HR_FORMAT)
+        return "-"
+    get_lunch_end_time.short_description = 'Lunch End'
     
     def save_model(self, request, obj, form, change):
         """Set created_by and updated_by"""

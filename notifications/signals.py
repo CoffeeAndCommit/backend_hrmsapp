@@ -155,21 +155,15 @@ def handle_timesheet_notification(sender, instance, created, **kwargs):
 def handle_manual_attendance_notification(sender, instance, created, **kwargs):
     try:
         if created:
-            SlackNotificationService.notify_manual_attendance_request(
-                instance.employee,
-                instance.date.strftime("%d-%m-%Y"),
-                instance.entry_time.strftime("%I:%M %p"),
-                instance.exit_time.strftime("%I:%M %p"),
-                f"{instance.hours or ''} hours requested",
-                instance.reason
-            )
+            SlackNotificationService.notify_manual_attendance_request(instance)
         elif not created:
             update_fields = kwargs.get('update_fields') or []
             if 'status' in update_fields and instance.status == 'approved':
                 SlackNotificationService.notify_manual_attendance_approved(
                     instance.employee,
                     instance.date.strftime("%d-%m-%Y"),
-                    instance.exit_time.strftime("%I:%M %p") # Matching prototype
+                    instance.entry_time.strftime("%I:%M %p"),
+                    instance.exit_time.strftime("%I:%M %p")
                 )
     except Exception as e:
         logger.error(f"Error in manual attendance notification signal: {e}")

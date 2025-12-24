@@ -153,6 +153,12 @@ class Attendance(models.Model):
         help_text="Additional text field"
     )
     
+    # Keyword Tracking Fields
+    standup_time = models.DateTimeField(null=True, blank=True)
+    report_time = models.DateTimeField(null=True, blank=True)
+    lunch_start_time = models.DateTimeField(null=True, blank=True)
+    lunch_end_time = models.DateTimeField(null=True, blank=True)
+    
     # Flags
     is_day_before_joining = models.BooleanField(
         default=False,
