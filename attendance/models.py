@@ -153,6 +153,12 @@ class Attendance(models.Model):
         help_text="Additional text field"
     )
     
+    # Keyword Tracking Fields
+    standup_time = models.DateTimeField(null=True, blank=True)
+    report_time = models.DateTimeField(null=True, blank=True)
+    lunch_start_time = models.DateTimeField(null=True, blank=True)
+    lunch_end_time = models.DateTimeField(null=True, blank=True)
+    
     # Flags
     is_day_before_joining = models.BooleanField(
         default=False,
@@ -299,4 +305,46 @@ class Attendance(models.Model):
         
         self.full_clean()
         super().save(*args, **kwargs)
+#  ms
+class Timesheet(models.Model):
+    """Monthly timesheet submission"""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='timesheets')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.employee.get_full_name()} - {self.start_date} to {self.end_date}"
+
+class ManualAttendanceRequest(models.Model):
+    """Manual correction request for entry/exit times"""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='manual_requests')
+    date = models.DateField()
+    entry_time = models.TimeField()
+    exit_time = models.TimeField()
+    hours = models.CharField(max_length=50, blank=True, null=True)
+    reason = models.TextField()
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.employee.get_full_name()} - {self.date} Manual Request"
 
