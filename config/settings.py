@@ -297,7 +297,7 @@ SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
 }
 
-CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com","https://*.ngrok-free.dev", "https://hrms-frontend-wheat.vercel.app", "https://protrudent-wallace-bifurcately.ngrok-free.dev"]
+CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com","https://*.ngrok-free.dev", "https://*.ngrok-free.app", "https://hrms-frontend-wheat.vercel.app", "https://protrudent-wallace-bifurcately.ngrok-free.dev", "https://protrudent-wallace-bifurcately.ngrok-free.app"]
 
 LOGGING = {
     'version': 1,
