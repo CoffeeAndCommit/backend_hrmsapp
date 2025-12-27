@@ -110,8 +110,6 @@ except ImportError:
 
 ROOT_URLCONF = 'config.urls'
 
-CORS_ALLOW_CREDENTIALS = True
-
 
 TEMPLATES = [
     {
