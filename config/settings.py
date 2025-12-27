@@ -130,12 +130,17 @@ TEMPLATES = [
     
 # CORS Settings - configurable via environment variables
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
+if not DEBUG:
+    # Browsers block credentials when using a wildcard origin
+    CORS_ALLOW_ALL_ORIGINS = False
+
 CORS_ALLOW_CREDENTIALS = True
 
 # For production, specify allowed origins
 CORS_ALLOWED_ORIGINS = [
     "https://hrms-frontend-wheat.vercel.app",
     "https://hrms-backend-4vbf.onrender.com",
+    "https://hrms-backend-09fn.onrender.com",
 ]
 
 # CSRF Settings
