@@ -26,7 +26,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Disable migrations for third-party apps we don't control
 MIGRATION_MODULES = {
-    'jet': None,
+    'jet': 'config.migrations.jet',
 }
 
 # -------------------- Installed Apps --------------------
