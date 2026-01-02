@@ -30,3 +30,4 @@ slack-sdk
 pymysql==1.1.1
 django-tidb
 cloudinary==1.44.1
+cryptography
