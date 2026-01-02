@@ -11,7 +11,8 @@ class Department(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='managed_departments'
+        related_name='managed_departments',
+        db_constraint=False,
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
