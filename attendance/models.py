@@ -90,14 +90,16 @@ class Attendance(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_attendances'
+        related_name='created_attendances',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_attendances'
+        related_name='updated_attendances',
+        db_constraint=False,
     )
 
     class Meta:

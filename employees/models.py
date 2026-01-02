@@ -211,14 +211,16 @@ class Employee(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_employees'
+        related_name='created_employees',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_employees'
+        related_name='updated_employees',
+        db_constraint=False,
     )
 
     class Meta:
@@ -380,14 +382,16 @@ class EmergencyContact(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_emergency_contacts'
+        related_name='created_emergency_contacts',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_emergency_contacts'
+        related_name='updated_emergency_contacts',
+        db_constraint=False,
     )
 
     class Meta:
@@ -466,14 +470,16 @@ class Education(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_educations'
+        related_name='created_educations',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_educations'
+        related_name='updated_educations',
+        db_constraint=False,
     )
 
     class Meta:
@@ -531,14 +537,16 @@ class WorkHistory(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_work_histories'
+        related_name='created_work_histories',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_work_histories'
+        related_name='updated_work_histories',
+        db_constraint=False,
     )
 
     class Meta:

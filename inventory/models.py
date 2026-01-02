@@ -149,14 +149,16 @@ class Device(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_devices'
+        related_name='created_devices',
+        db_constraint=False,
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='updated_devices'
+        related_name='updated_devices',
+        db_constraint=False,
     )
 
     class Meta:
@@ -217,7 +219,8 @@ class DeviceAssignment(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='device_assignments_made'
+        related_name='device_assignments_made',
+        db_constraint=False,
     )
     assigned_date = models.DateTimeField(auto_now_add=True)
     returned_date = models.DateTimeField(
@@ -231,7 +234,8 @@ class DeviceAssignment(models.Model):
         null=True,
         blank=True,
         related_name='device_returns_received',
-        help_text="Admin who received the returned device"
+        help_text="Admin who received the returned device",
+        db_constraint=False,
     )
     condition_at_assignment = models.CharField(
         max_length=20,

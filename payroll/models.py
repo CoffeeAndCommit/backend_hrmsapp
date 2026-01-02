@@ -28,7 +28,8 @@ class SalaryStructure(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        blank=True
+        blank=True,
+        db_constraint=False,
     )
 
     class Meta:
@@ -94,7 +95,8 @@ class Payslip(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='generated_payslips'
+        related_name='generated_payslips',
+        db_constraint=False,
     )
 
     class Meta:
