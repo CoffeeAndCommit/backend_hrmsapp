@@ -11,6 +11,7 @@ import dj_database_url
 from dotenv import load_dotenv
 
 load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # -------------------- Basic Settings --------------------
@@ -187,7 +188,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # -------------------- Database --------------------
 DATABASES = {
     'default': {
-        'ENGINE': 'django_tidb',
+        'ENGINE': 'django.db.backends.mysql',
         'NAME': os.getenv("DB_NAME"),
         'USER': os.getenv("DB_USER"),
         'PASSWORD': os.getenv("DB_PASSWORD"),
@@ -201,8 +202,10 @@ DATABASES = {
 db_from_env = dj_database_url.config(conn_max_age=500)
 DATABASES['default'].update(db_from_env)
 
-# FORCE django_tidb engine (required for TiDB compatibility)
-DATABASES['default']['ENGINE'] = 'django_tidb'
+# FORCE django_tidb engine only for TiDB / Render
+db_host = DATABASES['default'].get('HOST', '')
+if os.environ.get('RENDER') or (db_host and 'tidbcloud.com' in db_host):
+    DATABASES['default']['ENGINE'] = 'django_tidb'
 
 # Only add MySQL options if using MySQL/TiDB engine
 if DATABASES['default']['ENGINE'] in ['django.db.backends.mysql', 'django_tidb']:
