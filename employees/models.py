@@ -56,7 +56,7 @@ class Role(models.Model):
 
 class Employee(models.Model):
     """Main Employee model"""
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employees', null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employees', null=True, blank=True, db_constraint=False)
     
     # Employment Type Choices
     EMPLOYMENT_TYPE_CHOICES = [
@@ -154,17 +154,20 @@ class Employee(models.Model):
         related_name='employees',
         null=True,
         blank=True,
-        help_text="Employee role for access control"
+        help_text="Employee role for access control",
+        db_constraint=False,
     )
     department = models.ForeignKey(
         'departments.Department',
         on_delete=models.PROTECT,
-        related_name='employees'
+        related_name='employees',
+        db_constraint=False,
     )
     designation = models.ForeignKey(
         'departments.Designation',
         on_delete=models.PROTECT,
-        related_name='employees'
+        related_name='employees',
+        db_constraint=False,
     )
     reporting_manager = models.ForeignKey(
         'self',
@@ -172,17 +175,20 @@ class Employee(models.Model):
         null=True,
         blank=True,
         related_name='subordinates',
-        help_text="Direct reporting manager"
+        help_text="Direct reporting manager",
+        db_constraint=False,    
     )
     employee_type = models.CharField(
         max_length=20,
         choices=EMPLOYMENT_TYPE_CHOICES,
-        default='full_time'
+        default='full_time',    
+     
     )
     employment_status = models.CharField(
         max_length=20,
         choices=EMPLOYMENT_STATUS_CHOICES,
-        default='active'
+        default='active',
+       
     )
     joining_date = models.DateField(null=True, blank=True)
     probation_end_date = models.DateField(null=True, blank=True)
@@ -360,7 +366,8 @@ class EmergencyContact(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='emergency_contacts'
+        related_name='emergency_contacts',
+        db_constraint=False,
     )
     name = models.CharField(max_length=100)
     relationship = models.CharField(
@@ -428,7 +435,8 @@ class Education(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='educations'
+        related_name='educations',
+        db_constraint=False,
     )
     level = models.CharField(
         max_length=20,
@@ -507,7 +515,8 @@ class WorkHistory(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='work_histories'
+        related_name='work_histories',
+        db_constraint=False,
     )
     company_name = models.CharField(max_length=200)
     job_title = models.CharField(max_length=100)

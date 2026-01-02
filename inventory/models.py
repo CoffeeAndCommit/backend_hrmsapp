@@ -81,7 +81,8 @@ class Device(models.Model):
         DeviceType,
         on_delete=models.PROTECT,
         related_name='devices',
-        help_text="Type/category of the device"
+        help_text="Type/category of the device",
+        db_constraint=False,
     )
     serial_number = models.CharField(
         max_length=100,
@@ -118,7 +119,8 @@ class Device(models.Model):
         null=True,
         blank=True,
         related_name='assigned_devices',
-        help_text="Currently assigned employee"
+        help_text="Currently assigned employee",
+        db_constraint=False,
     )
     purchase_date = models.DateField(
         null=True,
@@ -151,6 +153,7 @@ class Device(models.Model):
         blank=True,
         related_name='created_devices',
         db_constraint=False,
+
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -208,12 +211,14 @@ class DeviceAssignment(models.Model):
     device = models.ForeignKey(
         Device,
         on_delete=models.CASCADE,
-        related_name='assignment_history'
+        related_name='assignment_history',
+        db_constraint=False,
     )
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='device_assignments'
+        related_name='device_assignments',
+        db_constraint=False,
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -57,7 +57,8 @@ class Payslip(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='payslips'
+        related_name='payslips',
+        db_constraint=False,
     )
     month = models.IntegerField()  # 1-12
     year = models.IntegerField()

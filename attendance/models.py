@@ -26,7 +26,8 @@ class Attendance(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='attendances'
+        related_name='attendances',
+        db_constraint=False,
     )
 
     date = models.DateField(db_index=True)
@@ -186,7 +187,8 @@ class Timesheet(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='timesheets'
+        related_name='timesheets',
+        db_constraint=False,
     )
     start_date = models.DateField()
     end_date = models.DateField()
@@ -217,7 +219,8 @@ class ManualAttendanceRequest(models.Model):
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
-        related_name='manual_requests'
+        related_name='manual_requests',
+        db_constraint=False,
     )
     date = models.DateField()
     entry_time = models.TimeField()

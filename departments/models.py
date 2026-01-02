@@ -37,7 +37,8 @@ class Designation(models.Model):
     department = models.ForeignKey(
         Department,
         on_delete=models.CASCADE,
-        related_name='designations'
+        related_name='designations',
+        db_constraint=False,
     )
     level = models.IntegerField(
         default=1,
