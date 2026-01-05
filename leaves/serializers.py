@@ -6,18 +6,21 @@ import os
 
 class LeaveSerializer(serializers.ModelSerializer):
     no_of_days = serializers.DecimalField(max_digits=5, decimal_places=1, coerce_to_string=False, default=1.0)
+    is_restricted = serializers.SerializerMethodField()
     doc_link_url = serializers.SerializerMethodField(read_only=True)
-    
     rh_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
+    def get_is_restricted(self, obj):
+        return obj.leave_type == Leave.LeaveType.RESTRICTED_HOLIDAY
 
     class Meta:
         model = Leave
         fields = [
             'id', 'from_date', 'to_date', 'no_of_days', 'reason', 
-            'leave_type', 'status', 'day_status', 'late_reason', 
+            'leave_type', 'is_restricted', 'status', 'day_status', 'late_reason', 
             'doc_link', 'doc_link_url', 'rejection_reason', 'rh_dates', 'created_at' ,'rh_id', 'restricted_holiday'
         ]
-        read_only_fields = ['created_at', 'doc_link_url', 'restricted_holiday']
+        read_only_fields = ['created_at', 'doc_link_url', 'restricted_holiday', 'is_restricted']
     
     def update(self, instance, validated_data):
         """Override update to enforce permission checks on status changes"""
@@ -50,10 +53,10 @@ class LeaveSerializer(serializers.ModelSerializer):
                         'status': 'You can only cancel your own leaves.'
                     })
                 
-                # Can only cancel pending or approved leaves
-                if instance.status not in ['Pending', 'Approved']:
+                # Can only cancel pending leaves
+                if instance.status != 'Pending':
                     raise serializers.ValidationError({
-                        'status': f'Cannot cancel a leave that is already {instance.status}.'
+                        'status': f'Cannot cancel a leave that is already {instance.status}. Only Pending leaves can be cancelled.'
                     })
         
         return super().update(instance, validated_data)
@@ -113,10 +116,10 @@ class LeaveSerializer(serializers.ModelSerializer):
             except RestrictedHoliday.DoesNotExist:
                 raise serializers.ValidationError({"rh_id": "Invalid or inactive Restricted Holiday selected."})
 
-            # Validate that the leave date matches the RH date
-            if from_date != rh_obj.date:
+            # Validate that the leave date is not before the holiday date
+            if from_date < rh_obj.date:
                  raise serializers.ValidationError({
-                     "from_date": f"Leave date ({from_date}) must match the Restricted Holiday date ({rh_obj.date})."
+                     "from_date": f"Restricted Holiday leave cannot be taken before the actual holiday date ({rh_obj.date})."
                  })
             
             # Save the object in data temporarily to use in create()
@@ -126,9 +129,14 @@ class LeaveSerializer(serializers.ModelSerializer):
         
         # Check leave balance
         try:
+            # Special case: Restricted Holiday balance is often tracked on the Casual Leave record
+            target_leave_type = leave_type
+            if leave_type == 'Restricted Holiday':
+                 target_leave_type = 'Casual Leave'
+                 
             balance = LeaveBalance.objects.get(
                 employee=employee,
-                leave_type=leave_type,
+                leave_type=target_leave_type,
                 year=current_year
             )
             

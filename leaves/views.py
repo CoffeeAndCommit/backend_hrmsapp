@@ -189,62 +189,31 @@ class LeaveViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='submit-leave')
     def submit_leave(self, request):
         """
-        Custom endpoint to match user's 'apply_leave' payload structure if needed,
-        or just standard create. User's payload has 'action'='apply_leave'.
+        Custom endpoint to match user's 'apply_leave' payload structure.
         """
-        # User payload mapping
-        data = request.data.copy()
-        
-        # Map fields if user payload is different
-        # User: from_date, to_date, no_of_days, reason, leave_type, day_status...
-        # Our model: Same names mostly.
-        
         user = request.user
         if not hasattr(user, 'employee_profile'):
             return Response({
                 "error": 1, 
                 "message": "User must have an employee profile to apply for leaves."
             }, status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.get_serializer(data=data)
+            
+        serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             try:
-                # 3. Check Balance Logic BEFORE saving
-                leave_type = serializer.validated_data.get('leave_type')
-                no_of_days = serializer.validated_data.get('no_of_days', 1)
-                rh_obj = serializer.validated_data.get('restricted_holiday_obj')
-
-                current_year = timezone.now().year
-
-                balance, created = LeaveBalance.objects.get_or_create(
-                    employee=user.employee_profile,
-                    year=current_year,
-                    leave_type=leave_type,
-                    defaults={'total_allocated': 0, 'rh_allocated': 2}
-                )
-
-                # Check RH Balance
-                if leave_type == 'Restricted Holiday':
-                    if balance.rh_available <= 0:
-                         return Response({"error": 1, "message": "No Restricted Holiday (RH) quota available."}, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    # Check Normal Balance
-                    if balance.available < no_of_days:
-                         return Response({"error": 1, "message": f"Insufficient {leave_type} balance."}, status=status.HTTP_400_BAD_REQUEST)
-
-                # 4. Save Leave (Status defaults to Pending)
+                # The serializer's validate() already checks balances.
+                # The serializer's create() handles linking the restricted_holiday if 'rh_id' is passed.
                 leave = serializer.save(employee=user.employee_profile)
 
-                # 5. Update Balance (Mark as Pending)
-                # We update the 'pending' field. For RH, we treat it as 1 day pending.
-                balance.pending = float(balance.pending) + float(no_of_days)
-                balance.save()
-
+                # Balance updates (adding to pending) are handled by update_balance_on_leave_create signal.
+                
                 return Response({
                     "error": 0, 
                     "data": {
-                        "message": "Leave applied.",
+                        "message": "Leave applied successfully.",
                         "leave_id": leave.id,
-                        "status": leave.status
+                        "status": leave.status,
+                        "is_restricted": leave.leave_type == Leave.LeaveType.RESTRICTED_HOLIDAY
                     }
                 }, status=status.HTTP_201_CREATED)
 
@@ -272,6 +241,46 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
         # If the user wants a standalone upload endpoint that just saves the file and returns success:
         return Response({"error": 0, "message": "Uploaded successfully!!"})
+
+    @action(detail=False, methods=['get'], url_path='rh-balance')
+    def get_rh_balance(self, request):
+        """
+        Endpoint to get the remaining Restricted Holiday balance AND 
+        the list of active Restricted Holidays for the year.
+        """
+        user = request.user
+        if not hasattr(user, 'employee_profile'):
+            return Response({"error": 1, "message": "Employee profile required."}, status=404)
+            
+        current_year = timezone.now().year
+        # 1. Get RH Balance (tracked on Casual Leave record)
+        balance = LeaveBalance.objects.filter(
+            employee=user.employee_profile,
+            leave_type='Casual Leave',
+            year=current_year
+        ).first()
+        
+        if not balance:
+            return Response({"error": 1, "message": "No leaf balance found."}, status=404)
+            
+        # 2. Get list of active Restricted Holidays for the year
+        rh_list = RestrictedHoliday.objects.filter(
+            is_active=True,
+            date__year=current_year
+        )
+        rh_serializer = RestrictedHolidaySerializer(rh_list, many=True)
+            
+        return Response({
+            "error": 0,
+            "data": {
+                "balance": {
+                    "rh_allocated": balance.rh_allocated,
+                    "rh_used": balance.rh_used,
+                    "rh_available": balance.rh_available
+                },
+                "holidays": rh_serializer.data
+            }
+        })
 
     @swagger_auto_schema(
         operation_description="Get leave balance for the logged-in user.",

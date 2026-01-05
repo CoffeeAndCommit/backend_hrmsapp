@@ -11,18 +11,27 @@ def update_balance_on_leave_create(sender, instance, created, **kwargs):
     """
     if created:
         try:
+            # RH balance is tracked on the Casual Leave record
+            target_type = instance.leave_type
+            if target_type == 'Restricted Holiday':
+                target_type = 'Casual Leave'
+
             balance = LeaveBalance.objects.get(
                 employee=instance.employee,
-                leave_type=instance.leave_type,
+                leave_type=target_type,
                 year=instance.from_date.year
             )
             
-            # Deduct from pending balance immediately
-            balance.pending += instance.no_of_days
+            if instance.leave_type == 'Restricted Holiday':
+                 # Update both general pending and RH specific pending
+                 balance.pending += instance.no_of_days
+                 balance.rh_pending += int(instance.no_of_days)
+            else:
+                balance.pending += instance.no_of_days
+                
             balance.save()
             
         except LeaveBalance.DoesNotExist:
-            # Balance should exist (validated in serializer), but handle gracefully
             pass
 
 
@@ -47,9 +56,13 @@ def update_balance_on_status_change(sender, instance, **kwargs):
             return
         
         # Get the balance
+        target_type = instance.leave_type
+        if target_type == 'Restricted Holiday':
+            target_type = 'Casual Leave'
+
         balance = LeaveBalance.objects.get(
             employee=instance.employee,
-            leave_type=instance.leave_type,
+            leave_type=target_type,
             year=instance.from_date.year
         )
         
@@ -58,18 +71,27 @@ def update_balance_on_status_change(sender, instance, **kwargs):
             # Move from pending to used
             balance.pending -= instance.no_of_days
             balance.used += instance.no_of_days
+            if instance.leave_type == 'Restricted Holiday':
+                 balance.rh_pending -= int(instance.no_of_days)
+                 balance.rh_used += int(instance.no_of_days)
         
         elif old_status == 'Pending' and new_status == 'Rejected':
             # Restore balance (remove from pending)
             balance.pending -= instance.no_of_days
+            if instance.leave_type == 'Restricted Holiday':
+                 balance.rh_pending -= int(instance.no_of_days)
         
         elif old_status == 'Approved' and new_status == 'Cancelled':
             # Restore balance (remove from used)
             balance.used -= instance.no_of_days
+            if instance.leave_type == 'Restricted Holiday':
+                 balance.rh_used -= int(instance.no_of_days)
         
         elif old_status == 'Pending' and new_status == 'Cancelled':
             # Restore balance (remove from pending)
             balance.pending -= instance.no_of_days
+            if instance.leave_type == 'Restricted Holiday':
+                 balance.rh_pending -= int(instance.no_of_days)
         
         balance.save()
         
