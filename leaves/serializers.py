@@ -3,6 +3,11 @@ from .models import Leave, LeaveQuota, LeaveBalance, RestrictedHoliday
 from django.utils import timezone
 from datetime import datetime
 import os
+ 
+class RestrictedHolidaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RestrictedHoliday
+        fields = '__all__'
 
 class LeaveSerializer(serializers.ModelSerializer):
     no_of_days = serializers.DecimalField(max_digits=5, decimal_places=1, coerce_to_string=False, default=1.0)
@@ -208,10 +213,6 @@ class LeaveBalanceSerializer(serializers.ModelSerializer):
         read_only_fields = ['used', 'pending']
 
 
-class RestrictedHolidaySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RestrictedHoliday
-        fields = '__all__'
 
 
 class LeaveCalculationSerializer(serializers.Serializer):
