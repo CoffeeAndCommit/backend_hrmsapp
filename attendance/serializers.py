@@ -50,16 +50,21 @@ def format_seconds_to_iso_duration(seconds):
     return f"PT{hours:02d}H{minutes:02d}M{secs:02d}S"
 
 
-def format_seconds_to_hms(seconds):
-    """Convert seconds to HH:MM:SS format"""
+def format_seconds_to_hms(seconds, include_sign=False):
+    """Convert seconds to HH:MM:SS format with optional sign"""
     if seconds is None:
         return "00:00:00"
     
-    hours = abs(seconds) // 3600
-    minutes = (abs(seconds) % 3600) // 60
-    secs = abs(seconds) % 60
+    sign = ""
+    if include_sign:
+        sign = "+ " if seconds >= 0 else "- "
+        
+    abs_seconds = abs(seconds)
+    hours = abs_seconds // 3600
+    minutes = (abs_seconds % 3600) // 60
+    secs = abs_seconds % 60
     
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{sign}{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def format_time_to_12hr(dt):
@@ -517,8 +522,8 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
                 office_out_time_str = format_datetime_to_iso(attendance.office_out_time) if attendance.office_out_time else ""
                 home_in_time_str = format_datetime_to_iso(attendance.home_in_time) if attendance.home_in_time else ""
                 home_out_time_str = format_datetime_to_iso(attendance.home_out_time) if attendance.home_out_time else ""
-                total_time_str = format_seconds_to_iso_duration(attendance.seconds_actual_worked_time)
-                extra_time_str = format_seconds_to_iso_duration(attendance.seconds_extra_time)
+                total_time_str = format_seconds_to_hms(attendance.seconds_actual_worked_time)
+                extra_time_str = format_seconds_to_hms(attendance.seconds_extra_time, include_sign=True)
                 
                 timesheet_status = getattr(attendance, 'timesheet_status', None)
                 if timesheet_status is None or timesheet_status == 'APPROVED':
