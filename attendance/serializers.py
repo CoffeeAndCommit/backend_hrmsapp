@@ -38,6 +38,30 @@ def format_seconds_to_hours_mins(seconds):
     return f"{hours} Hrs {minutes} Mins"
 
 
+def format_seconds_to_iso_duration(seconds):
+    """Convert seconds to ISO 8601 duration format like 'PT09H00M00S'"""
+    if seconds is None or seconds == 0:
+        return "PT00H00M00S"
+    
+    hours = abs(seconds) // 3600
+    minutes = (abs(seconds) % 3600) // 60
+    secs = abs(seconds) % 60
+    
+    return f"PT{hours:02d}H{minutes:02d}M{secs:02d}S"
+
+
+def format_seconds_to_hms(seconds):
+    """Convert seconds to HH:MM:SS format"""
+    if seconds is None:
+        return "00:00:00"
+    
+    hours = abs(seconds) // 3600
+    minutes = (abs(seconds) % 3600) // 60
+    secs = abs(seconds) % 60
+    
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def format_time_to_12hr(dt):
     """Convert datetime to 12-hour format like '10:23 AM'"""
     if dt is None:
@@ -489,12 +513,12 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
             if attendance:
                 office_hours = attendance.office_working_hours or default_office_hours
                 total_time = attendance.orignal_total_time or default_total_time
-                office_in_time_str = format_time_to_12hr(attendance.office_in_time) if attendance.office_in_time else ""
-                office_out_time_str = format_time_to_12hr(attendance.office_out_time) if attendance.office_out_time else ""
-                home_in_time_str = format_time_to_12hr(attendance.home_in_time) if attendance.home_in_time else ""
-                home_out_time_str = format_time_to_12hr(attendance.home_out_time) if attendance.home_out_time else ""
-                total_time_str = format_seconds_to_time(attendance.seconds_actual_worked_time)
-                extra_time_str = format_seconds_to_time(attendance.seconds_extra_time)
+                office_in_time_str = format_datetime_to_iso(attendance.office_in_time) if attendance.office_in_time else ""
+                office_out_time_str = format_datetime_to_iso(attendance.office_out_time) if attendance.office_out_time else ""
+                home_in_time_str = format_datetime_to_iso(attendance.home_in_time) if attendance.home_in_time else ""
+                home_out_time_str = format_datetime_to_iso(attendance.home_out_time) if attendance.home_out_time else ""
+                total_time_str = format_seconds_to_iso_duration(attendance.seconds_actual_worked_time)
+                extra_time_str = format_seconds_to_iso_duration(attendance.seconds_extra_time)
                 
                 timesheet_status = getattr(attendance, 'timesheet_status', None)
                 if timesheet_status is None or timesheet_status == 'APPROVED':
@@ -584,11 +608,12 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
                 total_working_days_expected += 1.0
         
         total_expected_seconds = int(total_working_days_expected * default_total_time)
-        total_working_hours = format_seconds_to_hours_mins(total_expected_seconds)
+        total_working_hours = format_seconds_to_hms(total_expected_seconds)
+        actual_working_hours_formatted = format_seconds_to_hms(total_seconds_worked)
         
         pending_seconds = total_expected_seconds - total_seconds_worked
         pending_sign = "+ " if pending_seconds >= 0 else "- "
-        pending_working_hours = f"{pending_sign}{format_seconds_to_hours_mins(abs(pending_seconds))}"
+        pending_working_hours = f"{pending_sign}{format_seconds_to_hms(abs(pending_seconds))}"
 
         # Month Navigation
         if month == 12: next_month, next_year = 1, year + 1
@@ -607,8 +632,8 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
             "month": month,
             "monthName": month_names[month - 1],
             "monthSummary": {
-                "actual_working_hours": actual_working_hours,
-                "completed_working_hours": actual_working_hours,
+                "actual_working_hours": actual_working_hours_formatted,
+                "completed_working_hours": actual_working_hours_formatted,
                 "pending_working_hours": pending_working_hours,
                 "total_working_hours": total_working_hours,
                 "WORKING_DAY": working_days_count,
