@@ -38,6 +38,35 @@ def format_seconds_to_hours_mins(seconds):
     return f"{hours} Hrs {minutes} Mins"
 
 
+def format_seconds_to_iso_duration(seconds):
+    """Convert seconds to ISO 8601 duration format like 'PT09H00M00S'"""
+    if seconds is None or seconds == 0:
+        return "PT00H00M00S"
+    
+    hours = abs(seconds) // 3600
+    minutes = (abs(seconds) % 3600) // 60
+    secs = abs(seconds) % 60
+    
+    return f"PT{hours:02d}H{minutes:02d}M{secs:02d}S"
+
+
+def format_seconds_to_hms(seconds, include_sign=False):
+    """Convert seconds to HH:MM:SS format with optional sign"""
+    if seconds is None:
+        return "00:00:00"
+    
+    sign = ""
+    if include_sign:
+        sign = "+ " if seconds >= 0 else "- "
+        
+    abs_seconds = abs(seconds)
+    hours = abs_seconds // 3600
+    minutes = (abs_seconds % 3600) // 60
+    secs = abs_seconds % 60
+    
+    return f"{sign}{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def format_time_to_12hr(dt):
     """Convert datetime to 12-hour format like '10:23 AM'"""
     if dt is None:
@@ -113,10 +142,10 @@ class AttendanceListSerializer(serializers.ModelSerializer):
         """Get summary of work locations and times"""
         parts = []
         if obj.office_seconds_worked > 0:
-            office_time = format_seconds_to_time(obj.office_seconds_worked)
+            office_time = format_seconds_to_hms(obj.office_seconds_worked)
             parts.append(f"Office: {office_time}")
         if obj.home_seconds_worked > 0:
-            home_time = format_seconds_to_time(obj.home_seconds_worked)
+            home_time = format_seconds_to_hms(obj.home_seconds_worked)
             parts.append(f"Home: {home_time}")
         return ", ".join(parts) if parts else ""
 
@@ -182,30 +211,28 @@ class AttendanceDetailSerializer(serializers.ModelSerializer):
     
     def get_total_time(self, obj):
         """Format total time worked"""
-        return format_seconds_to_time(obj.seconds_actual_worked_time)
+        return format_seconds_to_hms(obj.seconds_actual_worked_time)
     
     def get_extra_time(self, obj):
         """Format extra time with status"""
-        if obj.seconds_extra_time == 0:
-            return ""
-        return format_seconds_to_time(obj.seconds_extra_time)
+        return format_seconds_to_hms(obj.seconds_extra_time, include_sign=True)
     
     def get_office_time_formatted(self, obj):
         """Format office time worked"""
-        return format_seconds_to_time(obj.office_seconds_worked)
+        return format_seconds_to_hms(obj.office_seconds_worked)
     
     def get_home_time_formatted(self, obj):
         """Format home time worked"""
-        return format_seconds_to_time(obj.home_seconds_worked)
+        return format_seconds_to_hms(obj.home_seconds_worked)
     
     def get_work_location_summary(self, obj):
         """Get summary of work locations and times"""
         parts = []
         if obj.office_seconds_worked > 0:
-            office_time = format_seconds_to_time(obj.office_seconds_worked)
+            office_time = format_seconds_to_hms(obj.office_seconds_worked)
             parts.append(f"Office: {office_time}")
         if obj.home_seconds_worked > 0:
-            home_time = format_seconds_to_time(obj.home_seconds_worked)
+            home_time = format_seconds_to_hms(obj.home_seconds_worked)
             parts.append(f"Home: {home_time}")
         return ", ".join(parts) if parts else ""
     
@@ -422,6 +449,12 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
         total_seconds_extra = 0
         seconds_to_compensate = 0
         
+        # Counters for the summary
+        working_days_count = 0
+        non_working_days_count = 0
+        leave_days_count = 0
+        half_days_count = 0
+        
         for day in range(1, num_days + 1):
             current_date = datetime(year, month, day).date()
             day_name = current_date.strftime(DAY_NAME_FORMAT)
@@ -437,34 +470,46 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
             leave_info = get_leave_for_date(current_date, leaves_list)
             leave, is_rh, is_partial, partial_type = leave_info
             
-            # Determine day type with priority: Holiday > Weekend > Leave > Working Day
+            # Determine day type
             if is_before_joining:
-                day_type = "WORKING_DAY"  # Can be customized
-            elif is_holiday:
-                day_type = "HOLIDAY"
-            elif is_weekend:
-                day_type = "WEEKEND_OFF"
-            elif leave:  # Check for leave
-                # Safely compare leave status
+                day_type = "BEFORE_JOINING"
+                non_working_days_count += 1
+            elif is_holiday or is_weekend:
+                day_type = "NON_WORKING_DAY"
+                non_working_days_count += 1
+            elif leave:
                 leave_status = getattr(leave, 'status', '')
-                if leave_status == 'Approved' or leave_status == getattr(Leave.Status, 'APPROVED', 'Approved'):
-                    day_type = "LEAVE_APPROVED"
-                elif leave_status == 'Pending' or leave_status == getattr(Leave.Status, 'PENDING', 'Pending'):
-                    day_type = "LEAVE_PENDING"
-                elif leave_status == 'Rejected' or leave_status == getattr(Leave.Status, 'REJECTED', 'Rejected'):
-                    day_type = "LEAVE_REJECTED"
-                elif leave_status == 'Cancelled' or leave_status == getattr(Leave.Status, 'CANCELLED', 'Cancelled'):
-                    day_type = "LEAVE_CANCELLED"
+                if leave_status in ['Approved', 'APPROVED']:
+                    if is_partial:
+                        day_type = "WORKING_DAY"
+                        half_days_count += 1
+                        working_days_count += 1
+                    else:
+                        day_type = "LEAVE_DAY"
+                        leave_days_count += 1
                 else:
-                    day_type = "WORKING_DAY"
+                    # If leave is pending/rejected, it's still a working day or absent
+                    if is_future:
+                        day_type = "FUTURE_DAY"
+                        working_days_count += 1
+                    elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
+                        day_type = "WORKING_DAY"
+                        working_days_count += 1
+                    else:
+                        day_type = "ABSENT" if not is_future else "FUTURE_DAY"
+                        working_days_count += 1
             elif is_future:
-                day_type = "WORKING_DAY"  # FUTURE_WORKING_DAY removed
+                day_type = "FUTURE_DAY"
+                working_days_count += 1
             elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
                 day_type = "WORKING_DAY"
+                working_days_count += 1
             else:
-                day_type = "WORKING_DAY"
+                # Past day with no check-in and no leave
+                day_type = "ABSENT"
+                working_days_count += 1
             
-            # Default office working hours from settings
+            # Default working hours
             default_office_hours = getattr(settings, 'ATTENDANCE_DEFAULT_WORKING_HOURS', '09:00')
             default_total_time = getattr(settings, 'ATTENDANCE_DEFAULT_TOTAL_TIME_SECONDS', 32400)
             
@@ -475,17 +520,15 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
                 office_out_time_str = format_datetime_to_iso(attendance.office_out_time) if attendance.office_out_time else ""
                 home_in_time_str = format_datetime_to_iso(attendance.home_in_time) if attendance.home_in_time else ""
                 home_out_time_str = format_datetime_to_iso(attendance.home_out_time) if attendance.home_out_time else ""
-                total_time_str = format_seconds_to_time(attendance.seconds_actual_worked_time)
-                extra_time_str = format_seconds_to_time(attendance.seconds_extra_time)
+                total_time_str = format_seconds_to_hms(attendance.seconds_actual_worked_time)
+                extra_time_str = format_seconds_to_hms(attendance.seconds_extra_time, include_sign=True)
                 
-                # Only count APPROVED timesheets in totals (or records without timesheet_status for backward compatibility)
                 timesheet_status = getattr(attendance, 'timesheet_status', None)
                 if timesheet_status is None or timesheet_status == 'APPROVED':
-                        total_seconds_worked += attendance.seconds_actual_worked_time
-                        total_seconds_extra += attendance.seconds_extra_time
-                        
-                        if attendance.seconds_extra_time < 0:
-                            seconds_to_compensate += abs(attendance.seconds_extra_time)
+                    total_seconds_worked += attendance.seconds_actual_worked_time
+                    total_seconds_extra += attendance.seconds_extra_time
+                    if attendance.seconds_extra_time < 0:
+                        seconds_to_compensate += abs(attendance.seconds_extra_time)
             else:
                 office_hours = default_office_hours
                 total_time = default_total_time
@@ -496,185 +539,126 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
                 total_time_str = ""
                 extra_time_str = ""
             
-            # File URL and ID
+            # File and status
             file_url = ""
             file_id = ""
             if attendance and hasattr(attendance, 'tracker_screenshot') and attendance.tracker_screenshot:
-                try:
-                    file_url = attendance.tracker_screenshot.url
-                except (AttributeError, ValueError):
-                    file_url = ""
+                try: file_url = attendance.tracker_screenshot.url
+                except: file_url = ""
                 file_id = str(attendance.id)
             
-            # Status
-            status = ""
-            if attendance and hasattr(attendance, 'timesheet_status'):
-                status = attendance.get_timesheet_status_display()
+            status = attendance.get_timesheet_status_display() if attendance and hasattr(attendance, 'timesheet_status') else ""
+            comments = attendance.text or attendance.day_text or "" if attendance else ""
             
-            # Comments (from text or day_text)
-            comments = ""
-            if attendance:
-                comments = attendance.text or attendance.day_text or ""
-            
-            # Build day record
-            is_on_leave = leave is not None
-            admin_alert = 1 if (
-                not is_on_leave and  # Don't alert if on leave
-                not attendance and 
-                not is_future and 
-                not is_holiday and 
-                not is_weekend
-            ) else 0
-            
-            admin_alert_message = ADMIN_ALERT_MESSAGE_MISSING_TIME if (
-                not is_on_leave and
-                not attendance and 
-                not is_future and 
-                not is_holiday and 
-                not is_weekend
-            ) else ""
+            # Day text priority: Holiday name > Leave reason > Check-in notes
+            day_text = ""
+            if is_holiday: day_text = holiday_dates.get(current_date, "")
+            elif leave: day_text = leave.reason
+            elif attendance: day_text = attendance.day_text or attendance.text
             
             day_record = {
-                "date": current_date.strftime(DATE_FORMAT),
+                "full_date": current_date.strftime("%Y-%m-%d"),
+                "date": f"{day:02d}",
                 "day": day_name,
                 "office_working_hours": office_hours,
-                "admin_alert": admin_alert,
-                "admin_alert_message": admin_alert_message,
-                "day_text": leave.reason if leave else (attendance.day_text if attendance else ""),
                 "day_type": day_type,
-                "extra_time": extra_time_str,
-                "extra_time_status": attendance.extra_time_status if attendance else "",
-                "office_in_time": office_in_time_str,
-                "office_out_time": office_out_time_str,
-                "home_in_time": home_in_time_str,
-                "home_out_time": home_out_time_str,
-                "is_working_from_home": attendance.is_working_from_home if attendance else False,
-                "office_time_inside": attendance.office_time_inside if attendance else 0,
-                "orignal_total_time": attendance.orignal_total_time if attendance else total_time,
-                "seconds_actual_worked_time": attendance.seconds_actual_worked_time if attendance else 0,
-                "seconds_extra_time": attendance.seconds_extra_time if attendance else 0,
-                "text": attendance.text if attendance else "",
+                "day_text": day_text,
+                "in_time": office_in_time_str or home_in_time_str,
+                "out_time": office_out_time_str or home_out_time_str,
                 "total_time": total_time_str,
-                "file": file_url,
-                "fileId": file_id,
+                "extra_time": extra_time_str,
+                "text": comments,
+                "admin_alert": 0, # Simplified for now
+                "admin_alert_message": "",
+                "orignal_total_time": total_time,
+                "isDayBeforeJoining": is_before_joining,
                 "status": status,
-                "comments": comments,
                 "leave_id": leave.id if leave else None,
                 "leave_type": leave.leave_type if leave else "",
-                "leave_status": leave.get_status_display() if leave and hasattr(leave, 'get_status_display') else (getattr(leave, 'status', '') if leave else ""),
-                "leave_reason": getattr(leave, 'reason', '') if leave else "",
                 "is_restricted_holiday": is_rh,
-                "is_partial_leave": is_partial,
-                "partial_leave_type": partial_type if partial_type else "",
-                "leave_document": leave.doc_link.url if leave and hasattr(leave, 'doc_link') and leave.doc_link else "",
+                "is_partial_leave": is_partial
             }
-            
             attendance_array.append(day_record)
         
-        # Calculate summaries
-        compensation_time_str = format_seconds_to_time(seconds_to_compensate)
+        # Calculate summaries with "Till Today" logic
+        compensation_time_str = format_seconds_to_hms(seconds_to_compensate)
         actual_working_hours = format_seconds_to_hours_mins(total_seconds_worked)
         
-        # Calculate total working hours for the entire month (including future dates)
-        default_total_time = getattr(settings, 'ATTENDANCE_DEFAULT_TOTAL_TIME_SECONDS', 32400)
-        total_working_days = 0.0
+        calculation_limit_date = today if (year == today.year and month == today.month) else datetime(year, month, num_days).date()
+        total_working_days_expected = 0.0
         
         for day in range(1, num_days + 1):
             current_date = datetime(year, month, day).date()
-            is_weekend = current_date.weekday() >= 5  # Saturday=5, Sunday=6
+            if current_date > calculation_limit_date:
+                continue
+                
+            is_weekend = current_date.weekday() >= 5
             is_holiday = current_date in holiday_dates
             is_before_joining = employee.joining_date and current_date < employee.joining_date
             
-            # Skip if before joining date
-            if is_before_joining:
+            if is_before_joining or is_weekend or is_holiday:
                 continue
             
-            # Skip weekends and holidays
-            if is_weekend or is_holiday:
-                continue
+            l_info = get_leave_for_date(current_date, leaves_list)
+            l, i_rh, i_partial, p_type = l_info
+            l_status = getattr(l, 'status', '') if l else ''
             
-            # Check for approved leave (including future dates)
-            leave_info = get_leave_for_date(current_date, leaves_list)
-            leave, is_rh, is_partial, partial_type = leave_info
-            
-            # Handle leaves
-            leave_status = getattr(leave, 'status', '') if leave else ''
-            if leave and (leave_status == 'Approved' or leave_status == getattr(Leave.Status, 'APPROVED', 'Approved')):
-                # For partial leave, count partial hours (0.5 days)
-                if is_partial and partial_type:
-                    total_working_days += 0.5
-                # For restricted holidays, count as full working day
-                elif is_rh:
-                    total_working_days += 1.0
-                # Full day approved leave - skip
-                else:
-                    continue
+            if l and l_status in ['Approved', 'APPROVED']:
+                if i_partial: total_working_days_expected += 0.5
+                elif i_rh: total_working_days_expected += 1.0
+                # Full day leave = 0 hours expected
             else:
-                # Regular working day (including future dates)
-                total_working_days += 1.0
+                total_working_days_expected += 1.0
         
-        # Calculate total hours for the entire month
-        total_seconds = int(total_working_days * default_total_time)
-        total_working_hours = format_seconds_to_hours_mins(total_seconds)
+        total_expected_seconds = int(total_working_days_expected * default_total_time)
+        total_working_hours = format_seconds_to_hms(total_expected_seconds)
+        actual_working_hours_formatted = format_seconds_to_hms(total_seconds_worked)
         
-        # Calculate next and previous month
-        if month == 12:
-            next_month = 1
-            next_year = year + 1
-        else:
-            next_month = month + 1
-            next_year = year
+        pending_seconds = total_expected_seconds - total_seconds_worked
+        pending_sign = "+ " if pending_seconds >= 0 else "- "
+        pending_working_hours = f"{pending_sign}{format_seconds_to_hms(abs(pending_seconds))}"
+
+        # Month Navigation
+        if month == 12: next_month, next_year = 1, year + 1
+        else: next_month, next_year = month + 1, year
+        if month == 1: prev_month, prev_year = 12, year - 1
+        else: prev_month, prev_year = month - 1, year
         
-        if month == 1:
-            prev_month = 12
-            prev_year = year - 1
-        else:
-            prev_month = month - 1
-            prev_year = year
+        month_names = [formats.date_format(datetime(year, m, 1).date(), 'F') for m in range(1, 13)]
         
-        # Use Django's localization for month names
-        month_names = []
-        for m in range(1, 13):
-            # Create a date object for the month and get localized name
-            test_date = datetime(year, m, 1).date()
-            month_names.append(formats.date_format(test_date, 'F'))
-        
-        # Build response data
         data = {
+            "userProfileImage": "",
+            "userName": employee.get_full_name(),
+            "userjobtitle": employee.designation.name if employee.designation else "",
+            "userid": str(employee.id),
+            "year": year,
+            "month": month,
+            "monthName": month_names[month - 1],
+            "monthSummary": {
+                "actual_working_hours": actual_working_hours_formatted,
+                "completed_working_hours": actual_working_hours_formatted,
+                "pending_working_hours": pending_working_hours,
+                "total_working_hours": total_working_hours,
+                "WORKING_DAY": working_days_count,
+                "NON_WORKING_DAY": non_working_days_count,
+                "LEAVE_DAY": leave_days_count,
+                "HALF_DAY": half_days_count,
+                "admin_alert": "",
+                "admin_alert_message": "",
+                "seconds_actual_working_hours": total_expected_seconds,
+                "seconds_completed_working_hours": total_seconds_worked,
+                "seconds_pending_working_hours": pending_seconds
+            },
             "attendance": attendance_array,
             "compensationSummary": {
                 "seconds_to_be_compensate": seconds_to_compensate,
                 "time_to_be_compensate": compensation_time_str
             },
-            "message": "",
-            "month": month,
-            "monthName": month_names[month - 1],
-            "monthSummary": {
-                "actual_working_hours": actual_working_hours,
-                "total_working_hours": total_working_hours
-            },
-            "nextMonth": {
-                "year": str(next_year),
-                "month": f"{next_month:02d}",
-                "monthName": month_names[next_month - 1]
-            },
-            "previousMonth": {
-                "year": str(prev_year),
-                "month": f"{prev_month:02d}",
-                "monthName": month_names[prev_month - 1]
-            },
-            "userName": employee.get_full_name(),
-            "userProfileImage": "",  # You can add profile image URL if available
-            "userid": str(employee.id),
-            "userjobtitle": employee.designation.name if employee.designation else "",
-            "year": year,
+            "nextMonth": {"year": str(next_year), "month": f"{next_month:02d}", "monthName": month_names[next_month - 1]},
+            "previousMonth": {"year": str(prev_year), "month": f"{prev_month:02d}", "monthName": month_names[prev_month - 1]},
             "error": 0
         }
-        
-        return {
-            "error": 0,
-            "data": data
-        }
+        return {"error": 0, "data": data}
 
 
 class WeeklyTimesheetSubmitSerializer(serializers.Serializer):
@@ -857,12 +841,15 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                 home_out_time = getattr(attendance, 'home_out_time', None)
                 office_out_time = getattr(attendance, 'office_out_time', None)
                 
-                in_time_str = format_time_to_12hr(home_in_time) if home_in_time else format_time_to_12hr(office_in_time) if office_in_time else ""
-                out_time_str = format_time_to_12hr(home_out_time) if home_out_time else format_time_to_12hr(office_out_time) if office_out_time else ""
+                in_time_str = format_datetime_to_iso(home_in_time) if home_in_time else format_datetime_to_iso(office_in_time) if office_in_time else ""
+                out_time_str = format_datetime_to_iso(home_out_time) if home_out_time else format_datetime_to_iso(office_out_time) if office_out_time else ""
                 
-                # Calculate total hours
+                # Calculate total and extra time
                 seconds_worked = getattr(attendance, 'seconds_actual_worked_time', 0) or 0
-                total_hours = seconds_worked // 3600 if seconds_worked > 0 else 0
+                total_time_str = format_seconds_to_hms(seconds_worked)
+                
+                seconds_extra = getattr(attendance, 'seconds_extra_time', 0) or 0
+                extra_time_str = format_seconds_to_hms(seconds_extra, include_sign=True)
                 
                 # File URL - safely check for tracker_screenshot field
                 file_url = ""
@@ -891,7 +878,8 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                 total_time = default_total_time
                 in_time_str = ""
                 out_time_str = ""
-                total_hours = 0
+                total_time_str = "00:00:00"
+                extra_time_str = "00:00:00"
                 file_url = ""
                 file_id = ""
                 status = ""
@@ -903,7 +891,9 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                 "date": current_date.strftime(DAY_NUMBER_FORMAT),
                 "day": day_name,
                 "office_working_hours": office_hours,
-                "total_hours": str(total_hours) if total_hours > 0 else "0",
+                "total_hours": total_time_str,
+                "total_time": total_time_str,
+                "extra_time": extra_time_str,
                 "comments": comments,
                 "file": file_url,
                 "fileId": file_id,
