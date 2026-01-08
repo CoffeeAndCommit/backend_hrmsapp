@@ -100,6 +100,7 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     photo = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -110,6 +111,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "photo",
+            "photo_url",
             "phone_number",
             "gender",
             "job_title",
@@ -121,10 +123,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_photo(self, obj):
-        request = self.context.get("request")
-        if obj.photo and request:
-            return request.build_absolute_uri(obj.photo.url)
+        """Get the Cloudinary path/public_id from employee profile"""
+        if hasattr(obj, 'employee_profile') and obj.employee_profile.photo:
+            return obj.employee_profile.photo
         return None
+
+    def get_photo_url(self, obj):
+        """Construct full Cloudinary URL from employee profile's photo path"""
+        import os
+        photo_path = self.get_photo(obj)
+        if not photo_path:
+            return None
+        
+        if photo_path.startswith('http'):
+            return photo_path
+            
+        cloudinary_base = os.getenv('CLOUDINARY_BASE_URL', 'https://res.cloudinary.com/dhlyvqdoi/image/upload')
+        return f"{cloudinary_base}/{photo_path}"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
