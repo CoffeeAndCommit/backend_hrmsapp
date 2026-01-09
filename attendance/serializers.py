@@ -857,6 +857,7 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
         """Create weekly attendance data structure matching API format"""
         from django.utils import timezone
         from holidays.models import Holiday
+        from leaves.models import Leave
         from datetime import timedelta
         
         # Calculate week range (Monday to Sunday)
@@ -876,6 +877,14 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
         ).values_list('date', 'name')
         holiday_dates = {h[0]: h[1] for h in week_holidays}
         
+        # Get leaves for the week
+        week_leaves = Leave.objects.filter(
+            employee=employee,
+            from_date__lte=week_days[6],
+            to_date__gte=week_days[0]
+        ).order_by('from_date')
+        leaves_list = list(week_leaves)
+        
         # Create attendance map
         attendance_map = {rec.date: rec for rec in attendance_records}
         
@@ -892,17 +901,50 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
             # Get attendance record if exists
             attendance = attendance_map.get(current_date)
             
-            # Determine day type
-            if is_holiday:
+            # Determine day type - logic aligned with MonthlyAttendanceSerializer
+            is_before_joining = employee.joining_date and current_date < employee.joining_date
+            
+            # Get leave info: Prioritize direct link if available, otherwise manual lookup
+            leave = attendance.leave if attendance else None
+            if leave:
+                is_rh = leave.leave_type == 'Restricted Holiday'
+                is_partial = bool(leave.day_status)
+                partial_type = leave.day_status
+                leave_info = (leave, is_rh, is_partial, partial_type)
+            else:
+                leave_info = get_leave_for_date(current_date, leaves_list)
+                leave, is_rh, is_partial, partial_type = leave_info
+
+            if is_before_joining:
+                day_type = "BEFORE_JOINING"
+            elif is_holiday:
                 day_type = "HOLIDAY"
             elif is_weekend:
                 day_type = "WEEKEND_OFF"
+            elif leave:
+                leave_status = getattr(leave, 'status', '')
+                if leave_status in ['Approved', 'APPROVED']:
+                    if is_partial:
+                        day_type = "WORKING_DAY"
+                    else:
+                        day_type = "LEAVE_DAY"
+                else:
+                    if is_future:
+                        day_type = "WORKING_DAY"
+                    elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
+                        day_type = "WORKING_DAY"
+                    else:
+                        day_type = "ABSENT" if not is_future else "WORKING_DAY"
             elif is_future:
                 day_type = "WORKING_DAY"
-            elif attendance:
-                day_type = getattr(attendance, 'day_type', 'WORKING_DAY')
-            else:
+            elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
                 day_type = "WORKING_DAY"
+            else:
+                # Past day with no check-in and no leave
+                day_type = "ABSENT"
+                # For weekly, we still consider future days as WORKING_DAY in the loop above
+                # but let's double check alignment
+                if is_future: day_type = "WORKING_DAY"
             
             # Default office working hours
             default_office_hours = getattr(settings, 'ATTENDANCE_DEFAULT_WORKING_HOURS', '09:00')
@@ -982,8 +1024,7 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                     "admin_notes": getattr(attendance, 'timesheet_admin_notes', '')
                 }
 
-            # Get leave info: prioritizing direct link
-            leave = attendance.leave if attendance else None
+            # Get leave info for record - already fetched in day_type logic
             leave_record = None
             if leave:
                 leave_record = {
