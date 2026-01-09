@@ -138,9 +138,21 @@ class DeviceDetailSerializer(serializers.ModelSerializer):
             'employee_id': obj.employee.employee_id,
             'full_name': obj.employee.get_full_name(),
             'email': obj.employee.email,
+            'photo': obj.employee.photo,
+            'photo_url': self._get_photo_url_logic(obj.employee.photo),
             'department': obj.employee.department.name if obj.employee.department else None,
             'designation': obj.employee.designation.name if obj.employee.designation else None,
         }
+
+    def _get_photo_url_logic(self, photo):
+        """Internal helper for photo URL construction"""
+        if not photo:
+            return None
+        if photo.startswith('http'):
+            return photo
+        import os
+        cloudinary_base = os.getenv('CLOUDINARY_BASE_URL', 'https://res.cloudinary.com/dhlyvqdoi/image/upload')
+        return f"{cloudinary_base}/{photo}"
 
     def get_created_by_name(self, obj):
         if obj.created_by:
