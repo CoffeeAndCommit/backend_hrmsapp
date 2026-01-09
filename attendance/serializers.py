@@ -608,9 +608,9 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
                     "status_display": attendance.get_timesheet_status_display(),
                     "comments": attendance.text or attendance.day_text or "",
                     "file": file_url,
-                    "submitted_at": format_datetime_to_iso(attendance.timesheet_submitted_at),
-                    "approved_at": format_datetime_to_iso(attendance.timesheet_approved_at),
-                    "admin_notes": attendance.timesheet_admin_notes
+                    "submitted_at": format_datetime_to_iso(getattr(attendance, 'timesheet_submitted_at', None)),
+                    "approved_at": format_datetime_to_iso(getattr(attendance, 'timesheet_approved_at', None)),
+                    "admin_notes": getattr(attendance, 'timesheet_admin_notes', '')
                 }
 
             leave_record = None
@@ -628,20 +628,27 @@ class MonthlyAttendanceSerializer(serializers.Serializer):
 
             day_record = {
                 "id": attendance.id if attendance else None,
-                "full_date": current_date.strftime("%Y-%m-%d"),
-                "date": f"{day:02d}",
+                "attendance_id": attendance.id if attendance else None,
+                "full_date": current_date.strftime(DATE_FORMAT),
+                "date": current_date.strftime(DAY_NUMBER_FORMAT),
                 "day": day_name,
                 "office_working_hours": office_hours,
-                "day_type": day_type,
-                "day_text": day_text,
-                "in_time": office_in_time_str or home_in_time_str,
-                "out_time": office_out_time_str or home_out_time_str,
+                "total_hours": total_time_str,
                 "total_time": total_time_str,
                 "extra_time": extra_time_str,
                 "submission": submission,
                 "leave": leave_record,
-                "admin_alert": 0, # Simplified for now
-                "admin_alert_message": "",
+                "is_working_from_home": getattr(attendance, 'is_working_from_home', False) if attendance else False,
+                "in_time": office_in_time_str or home_in_time_str,
+                "out_time": office_out_time_str or home_out_time_str,
+                "day_type": day_type,
+                "day_text": day_text,
+                "holiday": {
+                    "is_holiday": is_holiday,
+                    "name": holiday_dates.get(current_date, "")
+                } if is_holiday else None,
+                "admin_alert": getattr(attendance, 'admin_alert', 0) if attendance else (0 if is_future or is_holiday or is_weekend else 1),
+                "admin_alert_message": getattr(attendance, 'admin_alert_message', "") if attendance else ("" if is_future or is_holiday or is_weekend else ADMIN_ALERT_MESSAGE_MISSING_TIME),
                 "orignal_total_time": total_time,
                 "isDayBeforeJoining": is_before_joining,
             }
@@ -857,6 +864,7 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
         """Create weekly attendance data structure matching API format"""
         from django.utils import timezone
         from holidays.models import Holiday
+        from leaves.models import Leave
         from datetime import timedelta
         
         # Calculate week range (Monday to Sunday)
@@ -876,6 +884,14 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
         ).values_list('date', 'name')
         holiday_dates = {h[0]: h[1] for h in week_holidays}
         
+        # Get leaves for the week
+        week_leaves = Leave.objects.filter(
+            employee=employee,
+            from_date__lte=week_days[6],
+            to_date__gte=week_days[0]
+        ).order_by('from_date')
+        leaves_list = list(week_leaves)
+        
         # Create attendance map
         attendance_map = {rec.date: rec for rec in attendance_records}
         
@@ -892,17 +908,50 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
             # Get attendance record if exists
             attendance = attendance_map.get(current_date)
             
-            # Determine day type
-            if is_holiday:
+            # Determine day type - logic aligned with MonthlyAttendanceSerializer
+            is_before_joining = employee.joining_date and current_date < employee.joining_date
+            
+            # Get leave info: Prioritize direct link if available, otherwise manual lookup
+            leave = attendance.leave if attendance else None
+            if leave:
+                is_rh = leave.leave_type == 'Restricted Holiday'
+                is_partial = bool(leave.day_status)
+                partial_type = leave.day_status
+                leave_info = (leave, is_rh, is_partial, partial_type)
+            else:
+                leave_info = get_leave_for_date(current_date, leaves_list)
+                leave, is_rh, is_partial, partial_type = leave_info
+
+            if is_before_joining:
+                day_type = "BEFORE_JOINING"
+            elif is_holiday:
                 day_type = "HOLIDAY"
             elif is_weekend:
                 day_type = "WEEKEND_OFF"
+            elif leave:
+                leave_status = getattr(leave, 'status', '')
+                if leave_status in ['Approved', 'APPROVED']:
+                    if is_partial:
+                        day_type = "WORKING_DAY"
+                    else:
+                        day_type = "LEAVE_DAY"
+                else:
+                    if is_future:
+                        day_type = "WORKING_DAY"
+                    elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
+                        day_type = "WORKING_DAY"
+                    else:
+                        day_type = "ABSENT" if not is_future else "WORKING_DAY"
             elif is_future:
                 day_type = "WORKING_DAY"
-            elif attendance:
-                day_type = getattr(attendance, 'day_type', 'WORKING_DAY')
-            else:
+            elif attendance and ((attendance.office_in_time and attendance.office_out_time) or (attendance.home_in_time and attendance.home_out_time)):
                 day_type = "WORKING_DAY"
+            else:
+                # Past day with no check-in and no leave
+                day_type = "ABSENT"
+                # For weekly, we still consider future days as WORKING_DAY in the loop above
+                # but let's double check alignment
+                if is_future: day_type = "WORKING_DAY"
             
             # Default office working hours
             default_office_hours = getattr(settings, 'ATTENDANCE_DEFAULT_WORKING_HOURS', '09:00')
@@ -982,8 +1031,7 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                     "admin_notes": getattr(attendance, 'timesheet_admin_notes', '')
                 }
 
-            # Get leave info: prioritizing direct link
-            leave = attendance.leave if attendance else None
+            # Get leave info for record - already fetched in day_type logic
             leave_record = None
             if leave:
                 leave_record = {
@@ -1011,8 +1059,15 @@ class WeeklyTimesheetSerializer(serializers.Serializer):
                 "in_time": in_time_str,
                 "out_time": out_time_str,
                 "day_type": day_type,
+                "day_text": day_text if attendance else ("" if not is_holiday and not leave else day_text),
+                "holiday": {
+                    "is_holiday": is_holiday,
+                    "name": holiday_dates.get(current_date, "")
+                } if is_holiday else None,
                 "admin_alert": getattr(attendance, 'admin_alert', 0) if attendance else (0 if is_future or is_holiday or is_weekend else 1),
                 "admin_alert_message": getattr(attendance, 'admin_alert_message', "") if attendance else ("" if is_future or is_holiday or is_weekend else ADMIN_ALERT_MESSAGE_MISSING_TIME),
+                "orignal_total_time": total_time,
+                "isDayBeforeJoining": is_before_joining,
             }
             
             attendance_array.append(day_record)
