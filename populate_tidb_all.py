@@ -106,13 +106,31 @@ def populate_all_data():
                 'date_of_birth': datetime.date(1990, 1, 1),
                 'joining_date': join_date,
                 'phone': f"98{random.randint(10000000, 99999999)}",
+                'address_line1': '123 Current St',
+                'city': 'New Delhi',
+                'state': 'Delhi',
+                'postal_code': '110001',
+                'address_line1_2': '456 Permanent Ave',
+                'city_2': 'Lucknow',
+                'state_2': 'Uttar Pradesh',
+                'postal_code_2': '226001',
+                'photo': f"profile_pics/{user.username}.jpg", # Sample photo path
                 'is_active': True
             }
         )
         if emp_created:
             print(f"   └── 👷 Created Employee: {emp.employee_id}")
         else:
-            print(f"   └── 👷 Found Employee: {emp.employee_id}")
+            print(f"   └── 👷 Found Employee: {emp.employee_id}. Updating addresses...")
+            emp.address_line1 = '123 Current St'
+            emp.city = 'New Delhi'
+            emp.state = 'Delhi'
+            emp.postal_code = '110001'
+            emp.address_line1_2 = '456 Permanent Ave'
+            emp.city_2 = 'Lucknow'
+            emp.state_2 = 'Uttar Pradesh'
+            emp.postal_code_2 = '226001'
+            emp.save()
         
         # --- 5. Education ---
         if not Education.objects.filter(employee=emp).exists():
@@ -152,24 +170,53 @@ def populate_all_data():
 
         # --- 7. Attendance & Timesheets ---
         today = timezone.localdate()
-        for i in range(7):
+        for i in range(14):
             date = today - datetime.timedelta(days=i)
-            if date.weekday() < 5: # Weekdays only
-                if not Attendance.objects.filter(employee=emp, date=date).exists():
-                    in_time = timezone.now().replace(year=date.year, month=date.month, day=date.day, hour=9, minute=0, second=0)
-                    out_time = in_time + datetime.timedelta(hours=9)
-                    
-                    Attendance.objects.create(
-                        employee=emp,
-                        date=date,
-                        in_time=in_time,
-                        out_time=out_time,
-                        day_type='WORKING_DAY',
-                        office_in_time=in_time,
-                        office_out_time=out_time,
-                        office_working_hours='09:00',
-                    )
-                    print(f"       └── 🕒 Added Attendance for {date}")
+            if date.weekday() < 5:
+                duration_hours = random.uniform(6.0, 10.0) 
+                in_time = timezone.now().replace(year=date.year, month=date.month, day=date.day, hour=9, minute=0, second=0, microsecond=0)
+                out_time = in_time + datetime.timedelta(hours=duration_hours)
+                
+                # Use update_or_create to ensure random data is applied
+                Attendance.objects.update_or_create(
+                    employee=emp,
+                    date=date,
+                    defaults={
+                        'in_time': in_time,
+                        'out_time': out_time,
+                        'day_type': 'WORKING_DAY',
+                        'entry_type': random.choice(['REGULAR', 'TIMESHEET', 'MANUAL']),
+                        'office_in_time': in_time,
+                        'office_out_time': out_time,
+                        'office_working_hours': '09:00',
+                    }
+                )
+                print(f"       └── 🕒 Updated Attendance for {date} ({duration_hours:.2f}h)")
+                # Add a PENDING timesheet entry for tomorrow for testing approval flow
+        tomorrow = today + datetime.timedelta(days=1)
+        pending_in = timezone.now().replace(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=9, minute=30, second=0, microsecond=0)
+        pending_out = pending_in + datetime.timedelta(hours=9, minutes=15)
+        
+        Attendance.objects.update_or_create(
+            employee=emp,
+            date=tomorrow,
+            defaults={
+                'in_time': pending_in,
+                'out_time': pending_out,
+                'office_in_time': pending_in,
+                'office_out_time': pending_out,
+                'seconds_actual_worked_time': int((pending_out - pending_in).total_seconds()),
+                'day_type': 'WORKING_DAY',
+                'entry_type': 'MANUAL',
+                'timesheet_status': 'PENDING',
+                'is_working_from_home': False,
+                'office_working_hours': '09:00',
+                'text': 'Testing pending approval flow',
+                'created_by': user,
+                'updated_by': user
+            }
+        )
+        print(f"       └── ⏳ Added PENDING timesheet for {tomorrow} (for testing approval flow)")
         
         if not Timesheet.objects.filter(employee=emp).exists():
             Timesheet.objects.create(
@@ -256,6 +303,22 @@ def populate_all_data():
                     assigned_by=admin_user,
                     condition_at_assignment='new'
                 )
+
+                # --- 9b. Device Comments ---
+                from inventory.models import DeviceComment
+                comments = [
+                    "Initial setup completed.",
+                    "Antivirus and software suite installed.",
+                    "Handed over to employee.",
+                    "Screen guard protector applied."
+                ]
+                for comment_text in comments[:random.randint(1, 4)]:
+                    DeviceComment.objects.create(
+                        device=laptop,
+                        employee=emp,
+                        comment=comment_text
+                    )
+                print(f"   └── 💬 Added comments for {laptop.serial_number}")
 
     # --- 10. Leaves ---
     print("\n🍃 Populating Leaves...")
@@ -401,3 +464,4 @@ if __name__ == "__main__":
 
 
 # DATABASE_URL='mysql://231jcYH2kME1CNj.root:slTPhzvfRf2bny82@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/test?ssl-mode=REQUIRED' python populate_tidb_all.py
+# Note: Added pending timesheet for testing - insert after line 177 manually

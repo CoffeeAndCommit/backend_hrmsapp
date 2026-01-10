@@ -477,11 +477,21 @@ class AttendanceViewSet(viewsets.ModelViewSet):
                 "office_time": format_seconds_to_time(attendance.office_seconds_worked),
                 "home_time": format_seconds_to_time(attendance.home_seconds_worked),
                 "extra_time": format_seconds_to_time(attendance.seconds_extra_time),
-                "extra_time_status": attendance.extra_time_status,
+                        "extra_time_status": attendance.extra_time_status,
                 "date": attendance.date.strftime(DATE_FORMAT)
             }
         }, status=status.HTTP_200_OK)
     
+    
+    @swagger_auto_schema(
+        operation_description="Get monthly attendance summary for an employee",
+        manual_parameters=[
+            openapi.Parameter('month', openapi.IN_QUERY, description="Month (1-12)", type=openapi.TYPE_INTEGER, required=True),
+            openapi.Parameter('year', openapi.IN_QUERY, description="Year (e.g., 2026)", type=openapi.TYPE_INTEGER, required=True),
+            openapi.Parameter('userid', openapi.IN_QUERY, description="Employee ID (optional, admin only)", type=openapi.TYPE_INTEGER, required=False),
+        ],
+        responses={200: openapi.Response("Success")}
+    )
     @action(detail=False, methods=['get'], url_path='monthly')
     def monthly_attendance(self, request):
         """
@@ -813,6 +823,39 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         home_in_time_str = serializer.validated_data.get('home_in_time', '').strip()
         home_out_time_str = serializer.validated_data.get('home_out_time', '').strip()
         
+        # Validate date is not weekend or holiday
+        # Check if weekend
+        if date.weekday() >= 5:  # Saturday=5, Sunday=6
+            day_name = date.strftime('%A')
+            return Response({
+                "error": 1,
+                "message": f"Cannot submit timesheet on weekends. {day_name} is a weekend."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if holiday
+        holiday = Holiday.objects.filter(date=date, is_active=True).first()
+        if holiday:
+            return Response({
+                "error": 1,
+                "message": f"Cannot submit timesheet on holidays. {holiday.name} is a holiday."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check for full-day approved leave on this date
+        from leaves.models import Leave
+        full_day_leave = Leave.objects.filter(
+            employee=employee,
+            from_date__lte=date,
+            to_date__gte=date,
+            status__in=['Approved', 'APPROVED'],
+            day_status__isnull=True  # Only full-day leaves (day_status is null for full-day)
+        ).first()
+        
+        if full_day_leave:
+            return Response({
+                "error": 1,
+                "message": f"Cannot submit timesheet for this day. You have an approved full-day {full_day_leave.leave_type} from {full_day_leave.from_date.strftime('%Y-%m-%d')} to {full_day_leave.to_date.strftime('%Y-%m-%d')}."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Parse total_time to seconds
         try:
             total_time_float = float(total_time_str)
@@ -983,6 +1026,39 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         in_time_str = serializer.validated_data['in_time']
         out_time_str = serializer.validated_data['out_time']
         is_working_from_home = serializer.validated_data.get('is_working_from_home', False)
+        
+        # Validate date is not weekend or holiday
+        # Check if weekend
+        if date.weekday() >= 5:  # Saturday=5, Sunday=6
+            day_name = date.strftime('%A')
+            return Response({
+                "error": 1,
+                "message": f"Cannot update attendance on weekends. {day_name} is a weekend."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if holiday
+        holiday = Holiday.objects.filter(date=date, is_active=True).first()
+        if holiday:
+            return Response({
+                "error": 1,
+                "message": f"Cannot update attendance on holidays. {holiday.name} is a holiday."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check for full-day approved leave on this date
+        from leaves.models import Leave
+        full_day_leave = Leave.objects.filter(
+            employee=employee,
+            from_date__lte=date,
+            to_date__gte=date,
+            status__in=['Approved', 'APPROVED'],
+            day_status__isnull=True  # Only full-day leaves (day_status is null for full-day)
+        ).first()
+        
+        if full_day_leave:
+            return Response({
+                "error": 1,
+                "message": f"Cannot update attendance for this day. You have an approved full-day {full_day_leave.leave_type} from {full_day_leave.from_date.strftime('%Y-%m-%d')} to {full_day_leave.to_date.strftime('%Y-%m-%d')}."
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Parse times
         try:
