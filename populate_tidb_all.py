@@ -106,6 +106,14 @@ def populate_all_data():
                 'date_of_birth': datetime.date(1990, 1, 1),
                 'joining_date': join_date,
                 'phone': f"98{random.randint(10000000, 99999999)}",
+                'address_line1': '123 Current St',
+                'city': 'New Delhi',
+                'state': 'Delhi',
+                'postal_code': '110001',
+                'address_line1_2': '456 Permanent Ave',
+                'city_2': 'Lucknow',
+                'state_2': 'Uttar Pradesh',
+                'postal_code_2': '226001',
                 'photo': f"profile_pics/{user.username}.jpg", # Sample photo path
                 'is_active': True
             }
