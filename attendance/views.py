@@ -823,6 +823,23 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         home_in_time_str = serializer.validated_data.get('home_in_time', '').strip()
         home_out_time_str = serializer.validated_data.get('home_out_time', '').strip()
         
+        # Validate date is not weekend or holiday
+        # Check if weekend
+        if date.weekday() >= 5:  # Saturday=5, Sunday=6
+            day_name = date.strftime('%A')
+            return Response({
+                "error": 1,
+                "message": f"Cannot submit timesheet on weekends. {day_name} is a weekend."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if holiday
+        holiday = Holiday.objects.filter(date=date, is_active=True).first()
+        if holiday:
+            return Response({
+                "error": 1,
+                "message": f"Cannot submit timesheet on holidays. {holiday.name} is a holiday."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Check for full-day approved leave on this date
         from leaves.models import Leave
         full_day_leave = Leave.objects.filter(
@@ -1010,6 +1027,23 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         out_time_str = serializer.validated_data['out_time']
         is_working_from_home = serializer.validated_data.get('is_working_from_home', False)
         
+        # Validate date is not weekend or holiday
+        # Check if weekend
+        if date.weekday() >= 5:  # Saturday=5, Sunday=6
+            day_name = date.strftime('%A')
+            return Response({
+                "error": 1,
+                "message": f"Cannot update attendance on weekends. {day_name} is a weekend."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if holiday
+        holiday = Holiday.objects.filter(date=date, is_active=True).first()
+        if holiday:
+            return Response({
+                "error": 1,
+                "message": f"Cannot update attendance on holidays. {holiday.name} is a holiday."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Check for full-day approved leave on this date
         from leaves.models import Leave
         full_day_leave = Leave.objects.filter(
